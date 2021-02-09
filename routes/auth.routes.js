@@ -1,15 +1,110 @@
-//create your routes here
+const router = require("express").Router();
+const bcrypt = require('bcryptjs');
+const UserModel = require('../models/User.model')
 
-// 1. Add a GET route for /signup . 
-// Show the signup.hbs file when the user visits that route
+/* GET signin page */
+router.get("/signin", (req, res, next) => {
+    // Shows the sign in form to the user
+    res.render('auth/signin.hbs')
+});
+
+/* GET signup page */
+router.get("/signup", (req, res, next) => {
+    // Shows the sign up form to the user
+    res.render('auth/signup.hbs')
+});
+
+// Handle POST requests to /signup
+// when the user submits the data in the sign up form, it will come here
+router.post("/signup", (req, res, next) => {
+    // we use req.body to grab data from the input form
+     const {name, email, password} = req.body
+    //console.log(req.body) // check if this is an empty object
+    // if not use the length 
 
 
-// 2. Add a GET route for /signin . 
-// Show the signin.hbs file when the user visits that route
+    //validate first
+    // checking if the user has entered all three fields
+    // we're missing one important step here
+    if (!name.length || !email.length || !password.length) {
+        res.render('auth/signup', {msg: 'Please enter all fields'})
+        return;
+    }
+
+    // validate if the user has entered email in the right format ( @ , .)
+     // regex that validates an email in javascript
+     let re = /\S+@\S+\.\S+/;
+     if (!re.test(email)) {
+        res.render('auth/signup', {msg: 'Email not in valid format'})
+        return;
+     }
+
+     
+     
+     // creating a salt 
+     let salt = bcrypt.genSaltSync(10);
+     let hash = bcrypt.hashSync(password, salt);
+     UserModel.create({name, email, password: hash})
+        .then(() => {
+            res.redirect('/')
+        })
+        .catch((err) => {
+            next(err)
+        })
+});
+
+// handle post requests when the user submits something in the sign in form
+router.post("/signin", (req, res, next) => {
+    const {email, password} = req.body
+
+    // implement the same set of validations as you did in signup as well
+    // NOTE: We have used the Async method here. Its just to show how it works
+    UserModel.findOne({email: email})
+        .then((result) => {
+            // if user exists
+            if (result) {
+                //check if the entered password matches with that in the DB
+                bcrypt.compare(password, result.password)
+                    .then((isMatching) => {
+                        if (isMatching) {
+                            // when the user successfully signs up
+                            req.session.loggedInUser = result
+                            res.redirect('/profile')
+                        }
+                        else {
+                            // when passwords don't match
+                            res.render('auth/signin.hbs', {msg: 'Passwords dont match'})
+                        }
+                    })
+            }
+            else {
+                // when the user signs in with an email that does not exits
+                res.render('auth/signin.hbs', {msg: 'Email does not exist'})
+            }
+        })
+        .catch((err) => {
+            next(err)
+        })
+   
+});
 
 
-// 3. don't forget to export your router with 'modeul.exports'
+// GET request to handle /profile
+
+router.get('/profile', (req, res) => {
+    let email = req.session.loggedInUser.email
+    res.render('profile.hbs', {email})
+})
+
+
+router.get('/logout', (req, res) => {
+    req.session.destroy()
+    res.redirect('/')
+})
 
 
 
-// And finally don't forget to link this router in your middleware at the bottom of app.js where the other routes are defined
+
+
+
+module.exports = router;
